@@ -21,6 +21,7 @@ export default function PhotoBooth({ neonColor, clearToken, isRecording, onRecor
   const trailRef = useRef([]);
   const particlesRef = useRef([]);
   const heartsRef = useRef([]);
+  const handRef = useRef(null);
   const fingertipsRef = useRef([]);
   const handStateRef = useRef({ isPinching: false, isTracking: false });
   const heartCooldownRef = useRef(0);
@@ -77,14 +78,18 @@ export default function PhotoBooth({ neonColor, clearToken, isRecording, onRecor
     // gesture detection + fingertip tracking
     hands.onResults((results) => {
       const landmarks = results.multiHandLandmarks ?? [];
+      // debug logging: verify MediaPipe hand detection data each callback.
+      console.log('hands:', results.multiHandLandmarks);
       fingertipsRef.current = [];
 
       if (!landmarks.length) {
+        handRef.current = null;
         handStateRef.current.isTracking = false;
         handStateRef.current.isPinching = false;
         return;
       }
 
+      handRef.current = landmarks[0];
       handStateRef.current.isTracking = true;
 
       let pinchCount = 0;
@@ -93,7 +98,8 @@ export default function PhotoBooth({ neonColor, clearToken, isRecording, onRecor
         const thumbTip = hand[THUMB_TIP];
         const wrist = hand[WRIST];
 
-        const tipX = indexTip.x * dims.width;
+        // coordinate flipping: webcam is mirrored, so flip x-space for all effects/drawing.
+        const tipX = (1 - indexTip.x) * dims.width;
         const tipY = indexTip.y * dims.height;
         fingertipsRef.current.push({ x: tipX, y: tipY });
 
@@ -199,23 +205,28 @@ export default function PhotoBooth({ neonColor, clearToken, isRecording, onRecor
         ctx.fillText('💖', h.x, h.y);
       });
 
-      // fingertip tracking pointer
-      const pointerColor = handStateRef.current.isPinching ? '#ff4ecd' : '#00eaff';
-      fingertipsRef.current.forEach((tip) => {
+      // pointer rendering: always-visible fingertip debug pointer while hand is detected.
+      if (handRef.current) {
+        const indexTip = handRef.current[FINGER_TIP];
+        // coordinate flipping for mirrored webcam pointer space.
+        const pointerX = (1 - indexTip.x) * dims.width;
+        const pointerY = indexTip.y * dims.height;
+        const pointerColor = handStateRef.current.isPinching ? '#ff4ecd' : '#00eaff';
+
         ctx.globalAlpha = 1;
         ctx.shadowColor = pointerColor;
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = 18;
         ctx.fillStyle = pointerColor;
         ctx.beginPath();
-        ctx.arc(tip.x, tip.y, 5, 0, Math.PI * 2);
+        ctx.arc(pointerX, pointerY, 5.5, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.2;
         ctx.strokeStyle = `${pointerColor}cc`;
         ctx.beginPath();
-        ctx.arc(tip.x, tip.y, 11, 0, Math.PI * 2);
+        ctx.arc(pointerX, pointerY, 12, 0, Math.PI * 2);
         ctx.stroke();
-      });
+      }
 
       ctx.globalAlpha = 1;
       animationRef.current = requestAnimationFrame(render);
